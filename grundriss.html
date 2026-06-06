@@ -654,7 +654,7 @@ window.addEventListener("keydown",e=>{
   if(k==="v")setTool("select");else if(k==="w")setTool("wall");else if(k==="r")setTool("room");
   else if(k==="t")setTool("door");else if(k==="f")setTool("window");else if(k==="g")setTool("garage");
   else if(k==="s")setTool("column");else if(k==="o")setTool("object");else if(k==="p")setTool("stair");
-  else if(k==="l")setTool("elevator");else if(k==="b")setTool("floor");else if(k==="e")setTool("delete");
+  else if(k==="l")setTool("elevator");else if(k==="b")setTool("floor");else if(k==="x")setTool("text");else if(k==="i"){setTool("sprite");document.getElementById("sym-overlay").classList.add("open");}else if(k==="e")setTool("delete");
   else if(e.key==="Escape"){chain=null;rectStart=null;sel=null;snapInfo=null;refresh();}
   else if(e.key==="Enter"){if(tool==="wall"&&chain)commitChain(false);}
   else if(e.key==="Delete"||e.key==="Backspace"){if(sel){snapshot();if(sel.kind==="wall")deleteWall(sel.id);else if(sel.kind==="opening")L().openings=L().openings.filter(o=>o.id!==sel.id);else if(sel.kind==="column")L().columns=L().columns.filter(c=>c.id!==sel.id);else if(sel.kind==="item")L().items=L().items.filter(x=>x.id!==sel.id);else if(sel.kind==="floor")L().floors=L().floors.filter(f=>f.id!==sel.id);sel=null;refresh();}}
