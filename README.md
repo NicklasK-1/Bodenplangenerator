@@ -3,6 +3,9 @@ To import the testfile click "Laden"
 
 .zip structure for custom asset-import
 meine_tokens.zip
+
  ├── spieler/krieger.png
+ 
  ├── spieler/magier.svg
+ 
  └── gegner/wache.jpg
