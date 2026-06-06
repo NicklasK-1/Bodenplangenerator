@@ -140,6 +140,8 @@ input[type=color]{width:34px;height:28px;border:none;background:none;padding:0;b
     <button class="tool" data-tool="floor" title="Fußboden (B)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 2"/><path d="M8 4v16M14 4v16M4 9h16M4 15h16" opacity=".5"/></svg><span class="kbd">B</span></button>
     <div class="tool-sep"></div>
+    <button class="tool" id="tool-asset" title="Eigene Assets platzieren (A)" onclick="document.getElementById('asset-overlay').classList.add('open');setTool('sprite')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 7v13h18V7"/><path d="M1 7h22"/><path d="M8 7V3h8v4"/><circle cx="12" cy="13" r="2.5"/></svg><span class="kbd">A</span></button>
     <button class="tool" data-tool="text" title="Text platzieren (X)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg><span class="kbd">X</span></button>
     <button class="tool" data-tool="sprite" title="SR6-Symbol platzieren (I)">
@@ -288,8 +290,8 @@ input[type=color]{width:34px;height:28px;border:none;background:none;padding:0;b
       <div class="sym-cats" id="sym-cats"></div>
       <div class="sym-grid-wrap" id="sym-grid-wrap">
         <div class="sym-load-hint" id="sym-load-hint">
-          Noch keine Symbole geladen.<br>ZIP-Datei der SR6-Kartensymbole auswählen:
-          <button id="sym-zip-btn">ZIP laden</button>
+          Noch keine SR6-Symbole geladen.<br>ZIP-Datei der SR6-Kartensymbole auswählen:
+          <button id="sym-zip-btn">SR6-ZIP laden</button>
         </div>
       </div>
     </div>
@@ -297,6 +299,32 @@ input[type=color]{width:34px;height:28px;border:none;background:none;padding:0;b
 </div>
 <input type="file" id="sym-zip-input" accept=".zip" style="display:none">
 
+
+
+
+<div class="sym-overlay" id="asset-overlay">
+  <div class="sym-panel">
+    <div class="sym-topbar">
+      <h2>Eigene Assets</h2>
+      <div id="asset-active-wrap" style="display:none" class="sym-active-preview">
+        <img id="asset-active-img" src="" alt=""><span id="asset-active-name"></span>
+      </div>
+      <input type="text" id="asset-search" placeholder="Suchen…">
+      <button id="asset-load-btn" title="ZIP laden" style="white-space:nowrap;font-size:12px;background:var(--btn);border:1px solid #3a3f4a;border-radius:7px;color:var(--txt-dim);padding:5px 10px;cursor:pointer">&#xFF0B; ZIP laden</button>
+      <button id="asset-close" title="Schließen">&#x2715;</button>
+    </div>
+    <div class="sym-body">
+      <div class="sym-cats" id="asset-cats"></div>
+      <div class="sym-grid-wrap" id="asset-grid-wrap">
+        <div class="sym-load-hint" id="asset-load-hint">
+          Noch keine Assets geladen.<br>ZIP-Datei mit PNG, JPEG oder SVG-Dateien in Unterordnern laden:
+          <button id="asset-hint-btn">ZIP laden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<input type="file" id="asset-zip-input" accept=".zip" multiple style="display:none">
 
 <script>
 "use strict";
@@ -724,7 +752,7 @@ window.addEventListener("keydown",e=>{
   if(k==="v")setTool("select");else if(k==="w")setTool("wall");else if(k==="r")setTool("room");
   else if(k==="t")setTool("door");else if(k==="f")setTool("window");else if(k==="g")setTool("garage");
   else if(k==="s")setTool("column");else if(k==="o")setTool("object");else if(k==="p")setTool("stair");
-  else if(k==="l")setTool("elevator");else if(k==="b")setTool("floor");else if(k==="x")setTool("text");else if(k==="i"){setTool("sprite");document.getElementById("sym-overlay").classList.add("open");}else if(k==="e")setTool("delete");
+  else if(k==="l")setTool("elevator");else if(k==="b")setTool("floor");else if(k==="a"){setTool("sprite");document.getElementById("asset-overlay").classList.add("open");}else if(k==="x")setTool("text");else if(k==="i"){setTool("sprite");document.getElementById("sym-overlay").classList.add("open");}else if(k==="e")setTool("delete");
   else if(e.key==="Escape"){chain=null;rectStart=null;sel=null;snapInfo=null;refresh();}
   else if(e.key==="Enter"){if(tool==="wall"&&chain)commitChain(false);}
   else if(e.key==="Delete"||e.key==="Backspace"){if(sel){snapshot();if(sel.kind==="wall")deleteWall(sel.id);else if(sel.kind==="opening")L().openings=L().openings.filter(o=>o.id!==sel.id);else if(sel.kind==="column")L().columns=L().columns.filter(c=>c.id!==sel.id);else if(sel.kind==="item")L().items=L().items.filter(x=>x.id!==sel.id);else if(sel.kind==="floor")L().floors=L().floors.filter(f=>f.id!==sel.id);sel=null;refresh();}}
@@ -949,6 +977,57 @@ function commitTextEditor(){
   hideTextEditor();
 }
 
+
+// ── Eigene Asset-ZIPs ──────────────────────────────────────────────────────
+let customTree = {};   // { 'zipbase/subcat': [paths...] }
+let loadedZips = [];   // [{name, baseName}]
+
+function assetMime(ext){
+  if(ext==="svg")return"image/svg+xml";
+  if(ext==="jpg"||ext==="jpeg")return"image/jpeg";
+  return"image/png";
+}
+function uniqueZipBase(filename){
+  let base=filename.replace(/\.zip$/i,"").replace(/[^a-zA-Z0-9_\-]/g,"_").slice(0,40);
+  const taken=loadedZips.map(z=>z.baseName);
+  let n=1,b=base;
+  while(taken.includes(b)){b=base+"_"+(n++);}
+  return b;
+}
+async function loadCustomZip(file){
+  try{
+    const baseName=uniqueZipBase(file.name);
+    const zip=await JSZip.loadAsync(await file.arrayBuffer());
+    const jobs=[];
+    zip.forEach((relPath,entry)=>{
+      if(entry.dir)return;
+      const ext=relPath.split(".").pop().toLowerCase();
+      if(!["png","jpg","jpeg","svg"].includes(ext))return;
+      const parts=relPath.split("/").filter(Boolean);
+      const subFolder=parts.length>1?parts.slice(0,-1).join("/"):"";
+      const catKey=subFolder?`${baseName}/${subFolder}`:baseName;
+      const fullPath=`${baseName}/${relPath}`;
+      if(!customTree[catKey])customTree[catKey]=[];
+      jobs.push(entry.async("base64").then(b64=>{
+        const dataUrl=`data:${assetMime(ext)};base64,${b64}`;
+        const img=new Image();img.src=dataUrl;
+        spriteCache.set(fullPath,{dataUrl,img});
+        customTree[catKey].push(fullPath);
+      }));
+    });
+    await Promise.all(jobs);
+    for(const cat of Object.keys(customTree))customTree[cat].sort();
+    loadedZips.push({name:file.name,baseName});
+    buildBrowserUI();
+  }catch(e){alert("Asset-ZIP konnte nicht geladen werden: "+e.message);}
+}
+function removeCustomZip(baseName){
+  for(const cat of Object.keys(customTree)){if(cat===baseName||cat.startsWith(baseName+"/"))delete customTree[cat];}
+  for(const key of spriteCache.keys()){if(key.startsWith(baseName+"/"))spriteCache.delete(key);}
+  loadedZips=loadedZips.filter(z=>z.baseName!==baseName);
+  buildBrowserUI();
+}
+
 // ============ SR6 Symbol Browser ============
 const CATNAMES={
   "kamera":"Kamera","kamera/sichtbar":"Kamera · sichtbar","kamera/verborgen":"Kamera · verborgen",
@@ -1005,7 +1084,6 @@ function loadSymbolZip(file){
 
 function buildBrowserUI(){
   const catsEl=document.getElementById("sym-cats");
-  const gridWrap=document.getElementById("sym-grid-wrap");
   document.getElementById("sym-load-hint").style.display="none";
   catsEl.innerHTML="";
   const topCats=[...new Set(Object.keys(symTree).map(k=>k.split("/")[0]))].sort();
@@ -1016,14 +1094,15 @@ function buildBrowserUI(){
     if(!first){const sep=document.createElement("div");sep.className="sym-cat-sep";catsEl.appendChild(sep);}first=false;
     for(const cat of(groups[top]||[])){
       const btn=document.createElement("button");btn.className="sym-cat-btn";
-      btn.dataset.cat=cat;btn.textContent=CATNAMES[cat]||cat;
+      btn.dataset.cat=cat;btn.textContent=CATNAMES[cat]||cat.split("/").pop();
       btn.addEventListener("click",()=>showCategory(cat));
       catsEl.appendChild(btn);
     }
   }
-  // Show first category
   const firstCat=Object.keys(symTree)[0];if(firstCat)showCategory(firstCat);
 }
+function _catHdr(label){const d=document.createElement("div");d.style="font-size:10px;color:#5c6470;padding:6px 16px 2px;text-transform:uppercase;letter-spacing:1px;font-weight:600";d.textContent=label;return d;}
+function _catBtn(cat,label){const btn=document.createElement("button");btn.className="sym-cat-btn"+(cat===activeCat?" active":"");btn.dataset.cat=cat;btn.textContent=label;btn.title=cat;btn.addEventListener("click",()=>showCategory(cat));return btn;}
 
 function showCategory(cat){
   activeCat=cat;
@@ -1036,7 +1115,6 @@ function filterAndRender(){
   const gridWrap=document.getElementById("sym-grid-wrap");
   gridWrap.innerHTML="";
   if(!Object.keys(symTree).length)return;
-  // Determine which cats to show
   let catsToShow=activeCat?[activeCat]:Object.keys(symTree);
   if(q){catsToShow=Object.keys(symTree);}
   let any=false;
@@ -1078,6 +1156,144 @@ document.getElementById("sym-overlay").addEventListener("click",e=>{if(e.target=
 document.getElementById("sym-zip-btn").addEventListener("click",()=>document.getElementById("sym-zip-input").click());
 document.getElementById("sym-zip-input").addEventListener("change",e=>{const f=e.target.files[0];if(f)loadSymbolZip(f);e.target.value="";});
 document.getElementById("sym-search").addEventListener("input",filterAndRender);
+
+
+// ═══════════════════════════════════════════════════════
+// Eigener Asset-Browser (von SR6-Browser getrennt)
+// ═══════════════════════════════════════════════════════
+let assetTree = {};   // { 'zipbase/subcat': [paths...] }
+let loadedAssetZips = [];
+let activeAssetCat = null;
+
+function assetMime(ext){
+  if(ext==="svg")return"image/svg+xml";
+  if(ext==="jpg"||ext==="jpeg")return"image/jpeg";
+  return"image/png";
+}
+function uniqueAssetBase(filename){
+  let base=filename.replace(/\.zip$/i,"").replace(/[^a-zA-Z0-9_\-]/g,"_").slice(0,40);
+  const taken=loadedAssetZips.map(z=>z.baseName);
+  let n=1,b=base;while(taken.includes(b)){b=base+"_"+(n++);}return b;
+}
+async function loadCustomZip(file){
+  try{
+    const baseName=uniqueAssetBase(file.name);
+    const zip=await JSZip.loadAsync(await file.arrayBuffer());
+    const jobs=[];
+    zip.forEach((relPath,entry)=>{
+      if(entry.dir)return;
+      const ext=relPath.split(".").pop().toLowerCase();
+      if(!["png","jpg","jpeg","svg"].includes(ext))return;
+      const parts=relPath.split("/").filter(Boolean);
+      const subFolder=parts.length>1?parts.slice(0,-1).join("/"):"";
+      const catKey=subFolder?`${baseName}/${subFolder}`:baseName;
+      const fullPath=`${baseName}/${relPath}`;
+      if(!assetTree[catKey])assetTree[catKey]=[];
+      jobs.push(entry.async("base64").then(b64=>{
+        const dataUrl=`data:${assetMime(ext)};base64,${b64}`;
+        const img=new Image();img.src=dataUrl;
+        spriteCache.set(fullPath,{dataUrl,img});
+        assetTree[catKey].push(fullPath);
+      }));
+    });
+    await Promise.all(jobs);
+    for(const cat of Object.keys(assetTree))assetTree[cat].sort();
+    loadedAssetZips.push({name:file.name,baseName});
+    buildAssetBrowserUI();
+  }catch(e){alert("Asset-ZIP konnte nicht geladen werden: "+e.message);}
+}
+function removeAssetZip(baseName){
+  for(const cat of Object.keys(assetTree)){if(cat===baseName||cat.startsWith(baseName+"/"))delete assetTree[cat];}
+  for(const key of spriteCache.keys()){if(key.startsWith(baseName+"/"))spriteCache.delete(key);}
+  loadedAssetZips=loadedAssetZips.filter(z=>z.baseName!==baseName);
+  buildAssetBrowserUI();
+}
+function buildAssetBrowserUI(){
+  const catsEl=document.getElementById("asset-cats");
+  const hasAssets=Object.keys(assetTree).length>0;
+  document.getElementById("asset-load-hint").style.display=hasAssets?"none":"";
+  catsEl.innerHTML="";
+  for(const {name,baseName} of loadedAssetZips){
+    const zipCats=Object.keys(assetTree).filter(k=>k===baseName||k.startsWith(baseName+"/")).sort();
+    if(!zipCats.length)continue;
+    // ZIP-Header mit Remove-Button
+    const hdrRow=document.createElement("div");
+    hdrRow.style="display:flex;align-items:center;justify-content:space-between;padding:6px 16px 2px";
+    const hdrTxt=document.createElement("span");
+    hdrTxt.style="font-size:10px;color:#9aa3b2;text-transform:uppercase;letter-spacing:1px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;cursor:default";
+    hdrTxt.title=name;hdrTxt.textContent=baseName;
+    const rmBtn=document.createElement("button");rmBtn.textContent="×";rmBtn.title=name+" entfernen";
+    rmBtn.style="background:none;border:none;color:#c4564a;cursor:pointer;font-size:15px;padding:0 3px;flex:none;line-height:1";
+    rmBtn.addEventListener("click",e=>{e.stopPropagation();if(confirm(`"${name}" entfernen?`))removeAssetZip(baseName);});
+    hdrRow.appendChild(hdrTxt);hdrRow.appendChild(rmBtn);catsEl.appendChild(hdrRow);
+    for(const cat of zipCats){
+      const label=cat===baseName?"(Stammverz.)":cat.replace(baseName+"/","").split("/").join(" / ");
+      const btn=document.createElement("button");btn.className="sym-cat-btn"+(cat===activeAssetCat?" active":"");
+      btn.dataset.cat=cat;btn.textContent=label;btn.title=cat;
+      btn.addEventListener("click",()=>showAssetCategory(cat));
+      catsEl.appendChild(btn);
+    }
+    const sep=document.createElement("div");sep.className="sym-cat-sep";catsEl.appendChild(sep);
+  }
+  // "ZIP laden" Button am Ende der Liste
+  const addBtn=document.createElement("button");addBtn.className="sym-cat-btn";
+  addBtn.style="color:var(--accent)";addBtn.textContent="＋ ZIP laden";
+  addBtn.addEventListener("click",()=>document.getElementById("asset-zip-input").click());
+  catsEl.appendChild(addBtn);
+  const first=Object.keys(assetTree)[0];if(first)showAssetCategory(first);
+}
+function showAssetCategory(cat){
+  activeAssetCat=cat;
+  document.querySelectorAll("#asset-cats .sym-cat-btn").forEach(b=>b.classList.toggle("active",b.dataset.cat===cat));
+  filterAndRenderAssets();
+}
+function filterAndRenderAssets(){
+  const q=(document.getElementById("asset-search").value||"").toLowerCase();
+  const gridWrap=document.getElementById("asset-grid-wrap");
+  gridWrap.innerHTML="";
+  if(!Object.keys(assetTree).length)return;
+  let catsToShow=activeAssetCat?[activeAssetCat]:Object.keys(assetTree);
+  if(q)catsToShow=Object.keys(assetTree);
+  let any=false;
+  for(const cat of catsToShow){
+    const paths=(assetTree[cat]||[]).filter(p=>!q||p.toLowerCase().includes(q));
+    if(!paths.length)continue;any=true;
+    const label=cat.split("/").pop();
+    const hdr=document.createElement("div");hdr.className="sym-group-hdr";hdr.textContent=label;gridWrap.appendChild(hdr);
+    const grid=document.createElement("div");grid.className="sym-grid";
+    for(const path of paths){
+      const btn=document.createElement("button");
+      btn.className="sym-img-btn"+(path===selectedSpritePath?" selected":"");
+      btn.title=path.split("/").pop().replace(/\.(png|jpg|jpeg|svg)$/i,"");
+      const cached=spriteCache.get(path);
+      if(cached){const img=document.createElement("img");img.src=cached.dataUrl;btn.appendChild(img);}
+      btn.addEventListener("click",()=>selectAsset(path));
+      grid.appendChild(btn);
+    }
+    gridWrap.appendChild(grid);
+  }
+  if(!any){const m=document.createElement("div");m.className="sym-load-hint";m.textContent="Keine Assets gefunden.";gridWrap.appendChild(m);}
+}
+function selectAsset(path){
+  selectedSpritePath=path;
+  const cached=spriteCache.get(path);
+  const wrap=document.getElementById("asset-active-wrap");
+  const img=document.getElementById("asset-active-img");
+  const name=document.getElementById("asset-active-name");
+  if(cached){img.src=cached.dataUrl;name.textContent=path.split("/").pop().replace(/\.(png|jpg|jpeg|svg)$/i,"");wrap.style.display="flex";}
+  document.getElementById("asset-overlay").classList.remove("open");
+  // Auch SR6-Vorschau aktualisieren (gemeinsames selectedSpritePath)
+  const sw=document.getElementById("sym-active-wrap"),si=document.getElementById("sym-active-img"),sn=document.getElementById("sym-active-name");
+  if(cached){si.src=cached.dataUrl;sn.textContent=name.textContent;sw.style.display="flex";}
+  setTool("sprite");render();
+}
+// Bindings
+document.getElementById("asset-close").addEventListener("click",()=>document.getElementById("asset-overlay").classList.remove("open"));
+document.getElementById("asset-overlay").addEventListener("click",e=>{if(e.target===document.getElementById("asset-overlay"))document.getElementById("asset-overlay").classList.remove("open");});
+document.getElementById("asset-load-btn").addEventListener("click",()=>document.getElementById("asset-zip-input").click());
+document.getElementById("asset-hint-btn").addEventListener("click",()=>document.getElementById("asset-zip-input").click());
+document.getElementById("asset-zip-input").addEventListener("change",e=>{for(const f of e.target.files)loadCustomZip(f);e.target.value="";});
+document.getElementById("asset-search").addEventListener("input",filterAndRenderAssets);
 
 //================= Start =================
 window.addEventListener("resize",resize);
