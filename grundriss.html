@@ -162,8 +162,13 @@ input[type=color]{width:34px;height:28px;border:none;background:none;padding:0;b
     <div class="sec">
       <h3>Ebenen</h3>
       <div id="level-list"></div>
-      <div class="btn-row"><button class="btn" id="lvl-add">+ Ebene</button><button class="btn danger" id="lvl-del">Löschen</button></div>
+      <div class="btn-row" style="margin-bottom:6px">
+        <button class="btn" id="lvl-add">+ Ebene</button>
+        <button class="btn" id="lvl-keller">+ Keller</button>
+      </div>
+      <div class="btn-row"><button class="btn danger" id="lvl-del">Ebene löschen</button></div>
       <div class="row" style="margin-top:9px"><label>Ebene darunter zeigen</label><div class="toggle on" id="t-underlay"></div></div>
+      <div class="row"><label>Ebene darüber zeigen</label><div class="toggle" id="t-overlay"></div></div>
     </div>
 
     <div class="sec">
@@ -304,7 +309,7 @@ let nextId = 1; const newId = () => nextId++;
 const settings = {
   defThick:0.2, defDoor:0.9, defWin:1.2, defGarage:2.5, defCol:0.3, defObj:0.6,
   defObjColor:"#9a9aa1", defFloorColor:"#e9e2d2",
-  grid:0.5, gridSnap:true, snapEnd:true, dims:true, showUnderlay:true,
+  grid:0.5, gridSnap:true, snapEnd:true, dims:true, showUnderlay:true, showOverlay:false,
   exRes:120, exBg:"#ffffff", exTransp:false, exGrid:false, exDims:true
 };
 
@@ -423,6 +428,10 @@ function render(){
   // Aktive Fußböden: decken die Unterlage ab UND werden sichtbar markiert (auch im EG)
   drawFloors(ctx,editorT,L(),settings.defFloorColor,true);
   renderLevel(ctx,editorT,L(),false);
+  // Überlage (Ebene darüber) — nach aktiver Ebene gezeichnet, leicht transparent
+  if(settings.showOverlay && state.active < state.levels.length-1){
+    ctx.save();ctx.globalAlpha=0.22;renderLevel(ctx,editorT,state.levels[state.active+1],true);ctx.restore();
+  }
   if(settings.dims) drawDims(ctx,editorT,L());
   ctx.save();ctx.globalCompositeOperation="destination-over";ctx.fillStyle="#f3efe6";ctx.fillRect(0,0,cssW,cssH);ctx.restore();
 
@@ -670,7 +679,7 @@ document.querySelector('[data-tool="sprite"]').addEventListener("click",()=>{
 });
 
 function bindToggle(id,key,after){const el=$(id);el.classList.toggle("on",settings[key]);el.addEventListener("click",()=>{settings[key]=!settings[key];el.classList.toggle("on",settings[key]);if(after)after();render();});}
-bindToggle("#t-gridsnap","gridSnap");bindToggle("#t-snapend","snapEnd");bindToggle("#t-dims","dims");bindToggle("#t-underlay","showUnderlay");
+bindToggle("#t-gridsnap","gridSnap");bindToggle("#t-snapend","snapEnd");bindToggle("#t-dims","dims");bindToggle("#t-underlay","showUnderlay");bindToggle("#t-overlay","showOverlay");
 bindToggle("#t-transp","exTransp");bindToggle("#t-exgrid","exGrid");bindToggle("#t-exdims","exDims");
 function bindNum(id,key){const el=$(id);el.value=settings[key];el.addEventListener("input",()=>{const v=parseFloat(el.value);if(!isNaN(v)){settings[key]=v;render();}});}
 bindNum("#def-thick","defThick");bindNum("#def-door","defDoor");bindNum("#def-win","defWin");bindNum("#def-garage","defGarage");bindNum("#def-col","defCol");bindNum("#def-obj","defObj");bindNum("#grid-size","grid");bindNum("#ex-res","exRes");
@@ -679,8 +688,16 @@ $("#def-objcolor").addEventListener("input",e=>settings.defObjColor=e.target.val
 $("#def-floorcolor").addEventListener("input",e=>settings.defFloorColor=e.target.value);
 
 //================= Ebenen-UI =================
-function renderLevels(){const list=$("#level-list");list.innerHTML="";for(let i=state.levels.length-1;i>=0;i--){const lv=state.levels[i];const d=document.createElement("div");d.className="lvl-item"+(i===state.active?" active":"");d.textContent=lv.name;d.title="Klick: wechseln &middot; Doppelklick: umbenennen";d.addEventListener("click",()=>{state.active=i;sel=null;renderLevels();refresh();});d.addEventListener("dblclick",()=>{const n=prompt("Ebenenname:",lv.name);if(n){lv.name=n.trim()||lv.name;renderLevels();}});list.appendChild(d);}}
+function renderLevels(){const list=$("#level-list");list.innerHTML="";for(let i=state.levels.length-1;i>=0;i--){const lv=state.levels[i];const d=document.createElement("div");d.className="lvl-item"+(i===state.active?" active":"");const isKeller=/^(UG|Keller|Untergeschoss)/i.test(lv.name);d.innerHTML=(isKeller?'<span style="opacity:.55;font-size:10px;margin-right:4px">&#8595;B</span>':'')+document.createTextNode(lv.name).textContent;d.title="Klick: wechseln · Doppelklick: umbenennen";d.addEventListener("click",()=>{state.active=i;sel=null;renderLevels();refresh();});d.addEventListener("dblclick",()=>{const n=prompt("Ebenenname:",lv.name);if(n){lv.name=n.trim()||lv.name;renderLevels();}});list.appendChild(d);}}
 $("#lvl-add").addEventListener("click",()=>{snapshot();state.levels.splice(state.active+1,0,makeLevel("Ebene "+(state.levels.length+1)));state.active+=1;sel=null;renderLevels();refresh();});
+$("#lvl-keller").addEventListener("click",()=>{
+  snapshot();
+  const kellCount=state.levels.filter(l=>/^(UG|Keller|Untergeschoss)/i.test(l.name)).length;
+  const name=kellCount===0?"Keller":`UG ${kellCount+1}`;
+  state.levels.splice(0,0,makeLevel(name));
+  state.active=0;
+  sel=null;renderLevels();refresh();
+});
 $("#lvl-del").addEventListener("click",()=>{if(state.levels.length<=1){alert("Mindestens eine Ebene muss bestehen bleiben.");return;}if(!confirm('Ebene "'+L().name+'" löschen?'))return;snapshot();state.levels.splice(state.active,1);state.active=Math.max(0,state.active-1);sel=null;renderLevels();refresh();});
 
 //================= Eigenschaften-Panel =================
@@ -770,6 +787,10 @@ $("#export").addEventListener("click",()=>{
   drawFloors(ec,T,L(),settings.defFloorColor,false);
   // Aktive Ebene
   renderLevel(ec,T,L(),false);
+  // Überlage
+  if(settings.showOverlay && state.active < state.levels.length-1){
+    ec.save();ec.globalAlpha=0.22;renderLevel(ec,T,state.levels[state.active+1],true);ec.restore();
+  }
   if(settings.exDims)drawDims(ec,T,L());
   ec.save();ec.globalCompositeOperation="destination-over";if(!settings.exTransp){ec.fillStyle=settings.exBg;ec.fillRect(0,0,W,H);}ec.restore();
   ex.toBlob(blob=>{const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="grundriss_"+L().name.replace(/\s+/g,"_")+".png";a.click();URL.revokeObjectURL(url);},"image/png");
