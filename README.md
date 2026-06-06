@@ -2,6 +2,7 @@ To get the icons for SR6 get the .zip from Pegasus https://shadowrun6.de/spielhi
 To import the testfile click "Laden"
 
 .zip structure for custom asset-import
+
 meine_tokens.zip
 
  ├── spieler/krieger.png
