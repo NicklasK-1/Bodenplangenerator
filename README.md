@@ -1,6 +1,6 @@
 # Grundriss-Editor
 
-Ein vollständig eigenständiger, browserbasierter Grundriss-Editor für taktische Karten – entwickelt für **Shadowrun 6th Edition**, nutzbar für jedes Tabletop-System. Keine Installation, keine Abhängigkeiten, keine Serververbindung nötig – einfach die HTML-Datei öffnen.
+Ein vollständig eigenständiger, browserbasierter Grundriss-Editor für taktische Karten – entwickelt für **Shadowrun 6th Edition**, nutzbar für jedes Tabletop-System. Keine Installation – einfach die HTML-Datei öffnen.
 
 > **Lizenz:** MIT © 2025 Nicklas  
 > Abhängigkeit: [JSZip 3.10.1](https://stuk.github.io/jszip/) (MIT)
