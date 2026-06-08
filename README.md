@@ -10,3 +10,5 @@ meine_tokens.zip
  ├── spieler/magier.svg
  
  └── gegner/wache.jpg
+
+ When placing walls press Enter to confirm.
