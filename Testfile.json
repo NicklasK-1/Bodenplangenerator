@@ -3342,7 +3342,9 @@
       "h": 0.5,
       "rot": 0
      }
-    ]
+    ],
+    "texts": [],
+    "curves": []
    },
    {
     "name": "Ebene 2",
@@ -4460,7 +4462,9 @@
       "h": 1,
       "rot": 0
      }
-    ]
+    ],
+    "texts": [],
+    "curves": []
    },
    {
     "name": "Ebene 3",
@@ -4777,7 +4781,9 @@
       "h": 1.5,
       "rot": -1.1980632376017626
      }
-    ]
+    ],
+    "texts": [],
+    "curves": []
    }
   ]
  },
@@ -4795,6 +4801,7 @@
   "snapEnd": true,
   "dims": true,
   "showUnderlay": true,
+  "showOverlay": false,
   "exRes": 120,
   "exBg": "#ffffff",
   "exTransp": false,
