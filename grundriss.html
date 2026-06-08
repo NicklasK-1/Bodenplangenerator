@@ -419,7 +419,6 @@ function drawColumns(c,T,lv,color){c.fillStyle=color;for(const col of lv.columns
 function drawItem(c,T,it,ghost){
   const p=T.pt(it.x,it.y),wp=T.m(it.w),hp=T.m(it.h);
   c.save();c.translate(p[0],p[1]);c.rotate(it.rot||0);
-  if(ghost){c.strokeStyle="#5b6270";c.lineWidth=1.5;if(it.type==="object"&&it.shape==="round"){c.beginPath();c.ellipse(0,0,wp/2,hp/2,0,0,7);c.stroke();}else c.strokeRect(-wp/2,-hp/2,wp,hp);c.restore();return;}
   if(it.type==="object"){
     const oc=it.color||"#9a9aa1";
     if(it.shape==="round"){c.fillStyle=oc;c.beginPath();c.ellipse(0,0,wp/2,hp/2,0,0,7);c.fill();c.save();c.beginPath();c.ellipse(0,0,wp/2,hp/2,0,0,7);c.clip();c.strokeStyle="#141414";c.lineWidth=Math.max(1,T.m(0.03));c.beginPath();c.moveTo(-wp/2,-hp/2);c.lineTo(wp/2,hp/2);c.moveTo(wp/2,-hp/2);c.lineTo(-wp/2,hp/2);c.stroke();c.restore();}
@@ -437,7 +436,7 @@ function drawDims(c,T,lv){c.font="600 12px 'IBM Plex Mono', monospace";c.textAli
 
 // Geometrie einer Ebene (Tinte oder Geist)
 function renderLevel(c,T,lv,ghost){
-  if(ghost){drawFloors(c,T,lv,settings.defFloorColor,true,"rgba(120,95,60,.55)");drawWalls(c,T,lv,"#5b6270");drawColumns(c,T,lv,"#6b7280");drawItems(c,T,lv,true);drawSprites(c,T,lv,true);drawTexts(c,T,lv,true);return;}
+  if(ghost){drawFloors(c,T,lv,settings.defFloorColor,true,"rgba(120,95,60,.55)");drawWalls(c,T,lv,"#2a2a31");drawColumns(c,T,lv,"#2a2a31");drawItems(c,T,lv,true);drawSprites(c,T,lv,true);drawTexts(c,T,lv,true);return;}
   drawWalls(c,T,lv,"#2a2a31");
   eraseOpenings(c,T,lv);
   drawOpeningSymbols(c,T,lv,"#2a2a31");
@@ -508,18 +507,42 @@ function drawScaleBar(c, pxPerMeter, W, H){
   c.restore();
 }
 
+// Löscht Bodenflächen der Ebenen fromLevel..toLevel aus einem Canvas (destination-out)
+function eraseFloorAreas(c,T,fromLevel,toLevel){
+  c.save();c.globalCompositeOperation="destination-out";c.fillStyle="#000";
+  for(let j=fromLevel;j<=toLevel;j++){
+    for(const f of (state.levels[j]?.floors||[])){
+      const pts=[T.pt(f.x-f.w/2,f.y-f.h/2),T.pt(f.x+f.w/2,f.y-f.h/2),
+                 T.pt(f.x+f.w/2,f.y+f.h/2),T.pt(f.x-f.w/2,f.y+f.h/2)];
+      c.beginPath();c.moveTo(pts[0][0],pts[0][1]);
+      for(let k=1;k<4;k++)c.lineTo(pts[k][0],pts[k][1]);
+      c.closePath();c.fill();
+    }
+  }
+  c.restore();
+}
+
 function sceneBoundsScreen(){const tl=toWorld(0,0),br=toWorld(cssW,cssH);return {minx:tl.x,miny:tl.y,maxx:br.x,maxy:br.y};}
 
 function render(){
   ctx.clearRect(0,0,cssW,cssH);
   const b=sceneBoundsScreen();
   drawGrid(ctx,editorT,b);
-  // Unterlagen: alle Ebenen darunter, von ganz unten nach oben, mit abnehmender Sichtbarkeit
+  // Unterlagen: jede Ebene auf eigenem Offscreen-Canvas rendern,
+  // dann Böden der darüberliegenden Ebenen ausstanzen → korrekte Verdeckung
   if(settings.showUnderlay && state.active>0){
     for(let i=0;i<state.active;i++){
-      const depth=state.active-i;                       // 1 = direkt darunter
-      const alpha=Math.max(0.05, 0.32*Math.pow(0.62,depth-1));
-      ctx.save();ctx.globalAlpha=alpha;renderLevel(ctx,editorT,state.levels[i],true);ctx.restore();
+      const depth=state.active-i, alpha=Math.max(0.05,0.32*Math.pow(0.62,depth-1));
+      const off=document.createElement("canvas");
+      off.width=Math.round(cssW*dpr); off.height=Math.round(cssH*dpr);
+      const oc=off.getContext("2d");
+      oc.setTransform(dpr,0,0,dpr,0,0);
+      renderLevel(oc,editorT,state.levels[i],true);
+      eraseFloorAreas(oc,editorT,i+1,state.active);
+      ctx.save();ctx.globalAlpha=alpha;
+      ctx.setTransform(1,0,0,1,0,0);  // identity für pixel-genaues drawImage
+      ctx.drawImage(off,0,0);
+      ctx.restore();
     }
   }
   // Aktive Fußböden: decken die Unterlage ab UND werden sichtbar markiert (auch im EG)
@@ -875,11 +898,15 @@ $("#export").addEventListener("click",()=>{
   const ex=document.createElement("canvas");ex.width=W;ex.height=H;
   const ec=ex.getContext("2d"),T={pt:(wx,wy)=>[(wx-b.minx)*res,(wy-b.miny)*res],m:(meters)=>meters*res};
   if(settings.exGrid)drawGrid(ec,T,b);
-  // Unterlagen mit gleicher Transparenzstaffelung wie im Editor
+  // Unterlagen mit Boden-Verdeckung (gleiche Logik wie Editor)
   if(settings.showUnderlay&&state.active>0){
     for(let i=0;i<state.active;i++){
       const depth=state.active-i,alpha=Math.max(0.05,0.32*Math.pow(0.62,depth-1));
-      ec.save();ec.globalAlpha=alpha;renderLevel(ec,T,state.levels[i],true);ec.restore();
+      const off=document.createElement("canvas");off.width=W;off.height=H;
+      const oc=off.getContext("2d");
+      renderLevel(oc,T,state.levels[i],true);
+      eraseFloorAreas(oc,T,i+1,state.active);
+      ec.save();ec.globalAlpha=alpha;ec.drawImage(off,0,0);ec.restore();
     }
   }
   // Aktive Fußböden (deckt Unterlage ab)
@@ -911,7 +938,7 @@ function drawTexts(c,T,lv,ghost){
     const p=T.pt(t.x,t.y),fs=Math.max(7,T.m(t.size||0.3));
     c.save();c.translate(p[0],p[1]);c.rotate(t.rot||0);
     if(ghost)c.globalAlpha*=0.55;
-    c.fillStyle=ghost?"#5b6270":(t.color||"#2a2a31");
+    c.fillStyle=ghost?(t.color||"#2a2a31"):(t.color||"#2a2a31");
     c.font=`${t.bold?"bold ":""}${fs}px 'IBM Plex Sans',sans-serif`;
     c.textAlign="left";c.textBaseline="alphabetic";
     c.fillText(t.text,0,0);
