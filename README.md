@@ -31,7 +31,7 @@ Ein vollständig eigenständiger, browserbasierter Grundriss-Editor für taktisc
 | **L** | Fahrstuhl | Box mit Diagonalkreuz + Türmarkierung; drehbar |
 | **B** | Fußboden | Beliebiges Polygon (Klicken = Eckpunkte setzen; Enter / Doppelklick schließt); Farbe wählbar |
 | **X** | Text | Klick platziert Inline-Eingabe; Doppelklick auf Text öffnet Editor; Schriftgröße, Farbe, Fettdruck, Drehung |
-| **I** | SR6-Symbole | Öffnet den SR6-Kartensymbol-Browser |
+| **I** | SR6-Symbole | Öffnet den SR6-Kartensymbol-Browser https://shadowrun6.de/spielhilfen-2/symbole-und-icons/237-sr6-kartensymbole.html | 
 | **A** | Eigene Assets | Öffnet den eigenen Asset-Browser |
 | **E** | Löschen | Element anklicken |
 | **Entf** | Löschen | Ausgewähltes Element entfernen |
